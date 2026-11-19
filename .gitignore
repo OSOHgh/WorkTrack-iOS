@@ -1,0 +1,24 @@
+# Xcode / iOS Build Artifacts
+build/
+DerivedData/
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.ipa
+Payload/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+
+# macOS / Windows System Files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE / Temp Files
+.idea/
+.vscode/
+*.swp
+*~
