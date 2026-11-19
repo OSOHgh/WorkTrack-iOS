@@ -289,12 +289,12 @@ final class NotificationManager: NSObject, ObservableObject, UNUserNotificationC
 
                 let content = UNMutableNotificationContent()
                 if dayOffset == 5 {
-                    content.title = "免费自签证书还有 2 天到期"
-                    content.subtitle = "WorkTrack 0元自签续期提醒"
+                    content.title = "自签证书还有 2 天到期"
+                    content.subtitle = "WorkTrack 证书续期提醒"
                     content.body = "建议在 Wi-Fi 下打开 SideStore 或连接电脑 Sideloadly 刷新 7 天签名，确保待办提醒持续生效。"
                 } else {
-                    content.title = "⚠️ 免费自签证书明天到期"
-                    content.subtitle = "WorkTrack 0元自签紧急提醒"
+                    content.title = "⚠️ 自签证书明天到期"
+                    content.subtitle = "WorkTrack 证书紧急提醒"
                     content.body = "签名仅剩最后 1 天！请今日完成续签，或在设置页导出全量本地备份以防过期。"
                 }
                 content.sound = .default

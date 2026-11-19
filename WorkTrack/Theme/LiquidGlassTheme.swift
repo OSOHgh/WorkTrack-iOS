@@ -262,7 +262,91 @@ struct LiquidGlassAmbientBackground: View {
                     .offset(x: -width * 0.10, y: height * 0.56)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+        .allowsHitTesting(false)
         .ignoresSafeArea()
+    }
+}
+
+// MARK: - Responsive Multi-Screen Layout Helpers
+
+struct AdaptiveScreenContainerModifier: ViewModifier {
+    var horizontalPadding: CGFloat?
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    func body(content: Content) -> some View {
+        let resolvedPadding = horizontalPadding ?? (horizontalSizeClass == .regular ? 20 : 16)
+        content
+            .frame(maxWidth: horizontalSizeClass == .regular ? 720 : .infinity, alignment: .leading)
+            .padding(.horizontal, resolvedPadding)
+            .frame(maxWidth: .infinity, alignment: .center)
+    }
+}
+
+extension View {
+    func adaptiveScreenContainer(horizontalPadding: CGFloat? = nil) -> some View {
+        modifier(AdaptiveScreenContainerModifier(horizontalPadding: horizontalPadding))
+    }
+}
+
+struct AdaptiveFlowLayout: Layout {
+    var horizontalSpacing: CGFloat = 8
+    var verticalSpacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let availableWidth = proposal.width ?? .infinity
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var maxRowWidth: CGFloat = 0
+
+        for subview in subviews {
+            let childProposal = availableWidth.isFinite
+                ? ProposedViewSize(width: availableWidth, height: nil)
+                : .unspecified
+            let size = subview.sizeThatFits(childProposal)
+
+            if currentX > 0 && currentX + size.width > availableWidth + 0.5 {
+                maxRowWidth = max(maxRowWidth, currentX - horizontalSpacing)
+                currentX = 0
+                currentY += rowHeight + verticalSpacing
+                rowHeight = 0
+            }
+
+            currentX += size.width + horizontalSpacing
+            rowHeight = max(rowHeight, size.height)
+        }
+
+        if currentX > 0 {
+            maxRowWidth = max(maxRowWidth, currentX - horizontalSpacing)
+        }
+        let finalWidth = availableWidth.isFinite ? availableWidth : maxRowWidth
+        return CGSize(width: finalWidth, height: currentY + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var currentX = bounds.minX
+        var currentY = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+
+            if currentX > bounds.minX && currentX + size.width > bounds.maxX + 0.5 {
+                currentX = bounds.minX
+                currentY += rowHeight + verticalSpacing
+                rowHeight = 0
+            }
+
+            subview.place(
+                at: CGPoint(x: currentX, y: currentY),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: min(size.width, bounds.width), height: size.height)
+            )
+            currentX += size.width + horizontalSpacing
+            rowHeight = max(rowHeight, size.height)
+        }
     }
 }
 
@@ -279,7 +363,9 @@ struct TagColorBadge: View {
                 .frame(width: 7, height: 7)
             Text(categoryTag.isEmpty ? "通用工作" : categoryTag)
                 .font(.caption.weight(.semibold))
+                .lineLimit(1)
         }
+        .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
         .foregroundStyle(tagColor.swiftUIColor)
@@ -303,7 +389,9 @@ struct TaskStatusBadge: View {
                 .font(.caption2.weight(.semibold))
             Text(status.displayName)
                 .font(.caption.weight(.medium))
+                .lineLimit(1)
         }
+        .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, 9)
         .padding(.vertical, 4)
         .foregroundStyle(status.themeColor)
@@ -327,7 +415,9 @@ struct TaskPriorityBadge: View {
                 .font(.caption2.weight(.bold))
             Text(priority.displayName)
                 .font(.caption2.weight(.semibold))
+                .lineLimit(1)
         }
+        .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .foregroundStyle(priority.themeColor)
@@ -347,7 +437,9 @@ struct ProgressEntryTypeBadge: View {
                 .font(.caption2.weight(.semibold))
             Text(entryType.displayName)
                 .font(.caption2.weight(.semibold))
+                .lineLimit(1)
         }
+        .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
         .foregroundStyle(entryType.themeColor)

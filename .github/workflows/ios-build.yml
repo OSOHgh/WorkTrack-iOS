@@ -65,6 +65,14 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
+      - name: Verify Native Full-Screen Info.plist Keys
+        run: |
+          PLIST="build/Build/Products/Release-iphoneos/WorkTrack.app/Info.plist"
+          plutil -p "$PLIST"
+          plutil -p "$PLIST" | grep -q '"UILaunchScreen"'
+          plutil -p "$PLIST" | grep -q '"NSPhotoLibraryUsageDescription"'
+          plutil -p "$PLIST" | grep -q '"UISupportedInterfaceOrientations"'
+
       - name: Package Unsigned .ipa
         run: |
           mkdir -p Payload

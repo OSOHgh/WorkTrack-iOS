@@ -51,11 +51,11 @@ struct ReminderSettingsView: View {
                         notificationQueueStatusCard
                         localBackupAndRestoreCard
                     }
-                    .padding(.horizontal, 16)
+                    .adaptiveScreenContainer()
                     .padding(.vertical, 14)
                 }
             }
-            .navigationTitle("提醒配置与0元备份")
+            .navigationTitle("提醒与备份")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -117,18 +117,22 @@ struct ReminderSettingsView: View {
 
     private var routineRemindersCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label("早间待办汇总 & 晚间复盘定时提醒", systemImage: "alarm.waves.left.and.right.fill")
+            HStack(spacing: 8) {
+                Label("早晚盘点定时提醒", systemImage: "alarm.waves.left.and.right.fill")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(TaskTagColor.amber.swiftUIColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
 
-                Spacer()
+                Spacer(minLength: 6)
 
                 Button {
                     showingNewRoutineSheet = true
                 } label: {
-                    Label("手动新增定时提醒", systemImage: "plus.circle.fill")
+                    Label("新增提醒", systemImage: "plus.circle.fill")
                         .font(.caption.weight(.bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .foregroundStyle(.white)
@@ -235,7 +239,7 @@ struct ReminderSettingsView: View {
         .liquidGlassCard(tint: TaskTagColor.amber.swiftUIColor)
     }
 
-    // MARK: - 2. 0-Cost Sideload Certificate 7-Day Renewal Assistant
+    // MARK: - 2. Sideload Certificate 7-Day Renewal Assistant
 
     private var sideloadCertificateHelperCard: some View {
         let daysLeft = notificationManager.daysRemainingUntilCertExpiry
@@ -243,7 +247,7 @@ struct ReminderSettingsView: View {
 
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("0元自签证书 7 天续签助手", systemImage: "signature")
+                Label("自签证书 7 天续签助手", systemImage: "signature")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(themeColor.swiftUIColor)
                 Spacer()
@@ -360,11 +364,11 @@ struct ReminderSettingsView: View {
         }
     }
 
-    // MARK: - 4. 0-Cost Full Local Backup & Restore Card
+    // MARK: - 4. Full Local Backup & Restore Card
 
     private var localBackupAndRestoreCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label("0元本地全量备份与恢复 (含图片与文件附件)", systemImage: "externaldrive.fill.badge.checkmark")
+            Label("本地全量备份与恢复 (含图片与文件附件)", systemImage: "externaldrive.fill.badge.checkmark")
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(TaskTagColor.emerald.swiftUIColor)
 
@@ -379,8 +383,10 @@ struct ReminderSettingsView: View {
                 Button {
                     prepareAndExportBackup()
                 } label: {
-                    Label("导出全量备份 (.json 含附件)", systemImage: "square.and.arrow.up.on.square.fill")
+                    Label("导出备份 (.json)", systemImage: "square.and.arrow.up.on.square.fill")
                         .font(.caption.weight(.bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .foregroundStyle(.white)
@@ -394,8 +400,10 @@ struct ReminderSettingsView: View {
                 Button {
                     showingBackupImporter = true
                 } label: {
-                    Label("从备份文件恢复", systemImage: "square.and.arrow.down.on.square.fill")
+                    Label("导入恢复备份", systemImage: "square.and.arrow.down.on.square.fill")
                         .font(.caption.weight(.bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .foregroundStyle(TaskTagColor.emerald.swiftUIColor)
@@ -650,7 +658,8 @@ struct RoutineRuleEditorSheet: View {
                         .padding(16)
                         .liquidGlassCard(tint: TaskTagColor.amber.swiftUIColor)
                     }
-                    .padding(16)
+                    .adaptiveScreenContainer()
+                    .padding(.vertical, 14)
                 }
             }
             .navigationTitle(existingRule == nil ? "新增定时盘点提醒" : "编辑定时盘点提醒")

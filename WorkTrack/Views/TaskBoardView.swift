@@ -69,7 +69,7 @@ struct TaskBoardView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottomTrailing) {
+            ZStack {
                 LiquidGlassAmbientBackground()
 
                 ScrollView {
@@ -77,33 +77,35 @@ struct TaskBoardView: View {
                         filterHeaderSection
                         taskListSection
                     }
-                    .padding(.horizontal, 16)
+                    .adaptiveScreenContainer()
                     .padding(.top, 10)
-                    .padding(.bottom, 88)
+                    .padding(.bottom, 20)
                 }
-
-                // Floating + 新建工作待办 Liquid Glass button
-                Button {
-                    showingNewTaskSheet = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                        Text("新建工作待办")
-                            .font(.subheadline.weight(.bold))
+                .safeAreaInset(edge: .bottom, alignment: .trailing) {
+                    // Floating + 新建工作待办 Liquid Glass button
+                    Button {
+                        showingNewTaskSheet = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title3)
+                            Text("新建工作待办")
+                                .font(.subheadline.weight(.bold))
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 14)
+                        .foregroundStyle(.white)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(TaskTagColor.sky.gradient)
+                                .shadow(color: TaskTagColor.sky.swiftUIColor.opacity(0.35), radius: 14, x: 0, y: 6)
+                        )
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 14)
-                    .foregroundStyle(.white)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(TaskTagColor.sky.gradient)
-                            .shadow(color: TaskTagColor.sky.swiftUIColor.opacity(0.35), radius: 14, x: 0, y: 6)
-                    )
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 8)
                 }
-                .buttonStyle(.plain)
-                .padding(.trailing, 20)
-                .padding(.bottom, 20)
             }
             .navigationTitle("全部工作与追踪看板")
             .searchable(text: $searchText, prompt: "搜索工作标题、分类标签、进展或结果...")

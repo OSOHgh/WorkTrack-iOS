@@ -33,7 +33,7 @@ struct TaskDetailView: View {
     @State private var attachmentError: String?
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             LiquidGlassAmbientBackground()
 
             ScrollView {
@@ -44,14 +44,15 @@ struct TaskDetailView: View {
                     attachmentsGalleryCard
                     progressTimelineCard
                 }
-                .padding(.horizontal, 16)
+                .adaptiveScreenContainer()
                 .padding(.top, 12)
-                .padding(.bottom, 108)
+                .padding(.bottom, 20)
             }
-
-            bottomFloatingActionBar
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
+            .safeAreaInset(edge: .bottom) {
+                bottomFloatingActionBar
+                    .adaptiveScreenContainer()
+                    .padding(.bottom, 6)
+            }
         }
         .navigationTitle("工作详情与进展追踪")
         .navigationBarTitleDisplayMode(.inline)
@@ -108,10 +109,12 @@ struct TaskDetailView: View {
 
     private var headerOverviewCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                TagColorBadge(categoryTag: task.categoryTag, tagColor: task.tagColor)
-                TaskPriorityBadge(priority: task.priority)
-                Spacer()
+            HStack(alignment: .top, spacing: 8) {
+                AdaptiveFlowLayout(horizontalSpacing: 6, verticalSpacing: 6) {
+                    TagColorBadge(categoryTag: task.categoryTag, tagColor: task.tagColor)
+                    TaskPriorityBadge(priority: task.priority)
+                }
+                Spacer(minLength: 8)
 
                 Menu {
                     ForEach(TaskStatus.allCases) { statusOption in
@@ -234,22 +237,16 @@ struct TaskDetailView: View {
 
             // Manual Add Custom Follow-Up / Overdue Reminder Box
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    DatePicker(
-                        "提醒时间",
-                        selection: $newReminderDate,
-                        displayedComponents: [.date, .hourAndMinute]
-                    )
-                    .font(.caption)
+                DatePicker(
+                    "提醒时间",
+                    selection: $newReminderDate,
+                    displayedComponents: [.date, .hourAndMinute]
+                )
+                .font(.caption)
 
-                    Toggle("逾期复追", isOn: $newReminderIsOverdueRetry)
-                        .labelsHidden()
-                        .tint(TaskTagColor.coral.swiftUIColor)
-
-                    Text(newReminderIsOverdueRetry ? "逾期复追" : "常规复追")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(newReminderIsOverdueRetry ? TaskTagColor.coral.swiftUIColor : TaskTagColor.violet.swiftUIColor)
-                }
+                Toggle("标记为逾期未处理复追提醒", isOn: $newReminderIsOverdueRetry)
+                    .font(.caption.weight(.semibold))
+                    .tint(TaskTagColor.coral.swiftUIColor)
 
                 HStack(spacing: 8) {
                     TextField("输入提醒备注（如：逾期未回，再次电话沟通确认）", text: $newReminderNote)
@@ -483,7 +480,7 @@ struct TaskDetailView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 12)], spacing: 12) {
                     ForEach(task.attachments) { item in
                         AttachmentThumbnailCard(
                             item: item,
@@ -633,9 +630,10 @@ struct TaskDetailView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "flag.checkered")
-                    Text("记录工作结果 (继续追踪 / 归档)")
+                    Text("记录结果 / 归档")
                         .fontWeight(.bold)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
                 .font(.subheadline)
                 .frame(maxWidth: .infinity)
@@ -914,7 +912,7 @@ struct DetailedProgressLogComposerSheet: View {
                                     .fill(Color.primary.opacity(0.05))
                             )
 
-                        HStack(spacing: 10) {
+                        AdaptiveFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
                             PhotosPicker(
                                 selection: $selectedPhotos,
                                 maxSelectionCount: 6,
@@ -922,6 +920,7 @@ struct DetailedProgressLogComposerSheet: View {
                             ) {
                                 Label("附带进展截图/照片", systemImage: "photo.badge.plus")
                                     .font(.caption.weight(.semibold))
+                                    .lineLimit(1)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
                                     .background(
@@ -934,6 +933,7 @@ struct DetailedProgressLogComposerSheet: View {
                             } label: {
                                 Label("附带文件", systemImage: "paperclip")
                                     .font(.caption.weight(.semibold))
+                                    .lineLimit(1)
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
                                     .background(
@@ -970,7 +970,8 @@ struct DetailedProgressLogComposerSheet: View {
                             }
                         }
                     }
-                    .padding(16)
+                    .adaptiveScreenContainer()
+                    .padding(.vertical, 14)
                 }
             }
             .navigationTitle("新增进展时间线记录")

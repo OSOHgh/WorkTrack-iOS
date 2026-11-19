@@ -82,7 +82,7 @@ struct ArchiveAndReportView: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .padding(.horizontal, 16)
+                    .adaptiveScreenContainer()
                     .padding(.top, 8)
 
                     if selectedSegment == .archiveLibrary {
@@ -219,7 +219,7 @@ struct ArchiveAndReportView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
+            .adaptiveScreenContainer()
             .padding(.bottom, 24)
         }
     }
@@ -251,10 +251,10 @@ struct ArchiveAndReportView: View {
                     }
 
                     if selectedPreset == .custom {
-                        HStack {
-                            DatePicker("起始", selection: $customStartDate, displayedComponents: .date)
+                        VStack(spacing: 8) {
+                            DatePicker("起始日期", selection: $customStartDate, displayedComponents: .date)
                                 .font(.caption)
-                            DatePicker("结束", selection: $customEndDate, displayedComponents: .date)
+                            DatePicker("结束日期", selection: $customEndDate, displayedComponents: .date)
                                 .font(.caption)
                         }
                     }
@@ -302,6 +302,8 @@ struct ArchiveAndReportView: View {
                                 systemImage: copiedToastVisible ? "checkmark.circle.fill" : "doc.on.doc.fill"
                             )
                             .font(.subheadline.weight(.bold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)
                             .foregroundStyle(.white)
@@ -319,6 +321,8 @@ struct ArchiveAndReportView: View {
                         ) {
                             Label("分享 / 导出汇报", systemImage: "square.and.arrow.up")
                                 .font(.subheadline.weight(.bold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 11)
                                 .foregroundStyle(TaskTagColor.indigo.swiftUIColor)
@@ -357,7 +361,7 @@ struct ArchiveAndReportView: View {
                 .padding(16)
                 .liquidGlassCard(tint: TaskTagColor.sky.swiftUIColor)
             }
-            .padding(.horizontal, 16)
+            .adaptiveScreenContainer()
             .padding(.bottom, 24)
         }
     }

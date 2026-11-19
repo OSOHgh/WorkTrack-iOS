@@ -82,7 +82,7 @@ struct FocusDashboardView: View {
                         }
                         todayFocusTasksSection
                     }
-                    .padding(.horizontal, 16)
+                    .adaptiveScreenContainer()
                     .padding(.vertical, 14)
                 }
             }
@@ -119,18 +119,20 @@ struct FocusDashboardView: View {
 
     private var summaryGlassHeader: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center) {
+            HStack(alignment: .center, spacing: 10) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(Date().formatted(.dateTime.month().day().weekday()))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Text("工作推进与结果闭环")
                         .font(.title3.weight(.bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
 
-                Spacer()
+                Spacer(minLength: 8)
 
-                // Compact 7-day free sideload certificate pill
+                // Compact 7-day sideload certificate pill
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                         notificationManager.markCertificateRefreshedToday()
@@ -142,9 +144,11 @@ struct FocusDashboardView: View {
                     HStack(spacing: 5) {
                         Image(systemName: daysLeft <= 2 ? "exclamationmark.shield.fill" : "checkmark.shield.fill")
                             .font(.caption2)
-                        Text(showingCertRenewedToast ? "已重置 7 天签名" : "免费签名剩余 \(daysLeft) 天 (点击标记已续签)")
+                        Text(showingCertRenewedToast ? "已重置 7 天" : "签名剩 \(daysLeft) 天")
                             .font(.caption2.weight(.semibold))
+                            .lineLimit(1)
                     }
+                    .fixedSize(horizontal: true, vertical: false)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .foregroundStyle(pillColor)
@@ -160,7 +164,7 @@ struct FocusDashboardView: View {
                 .buttonStyle(.plain)
             }
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 145, maximum: 220), spacing: 10)], spacing: 10) {
                 metricTile(
                     title: "今日待办",
                     value: "\(todayFocusTasks.count)",
@@ -271,13 +275,14 @@ struct FocusDashboardView: View {
                     }
                     .buttonStyle(.plain)
 
-                    HStack(spacing: 8) {
+                    AdaptiveFlowLayout(horizontalSpacing: 8, verticalSpacing: 8) {
                         Button {
                             quickFollowUpIsOverdueRetry = true
                             taskForQuickFollowUp = task
                         } label: {
                             Label("手动添加逾期复追时间", systemImage: "calendar.badge.plus")
                                 .font(.caption.weight(.semibold))
+                                .lineLimit(1)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 7)
                                 .foregroundStyle(.white)
@@ -293,6 +298,7 @@ struct FocusDashboardView: View {
                         } label: {
                             Label("录入结果/归档", systemImage: "flag.checkered")
                                 .font(.caption.weight(.semibold))
+                                .lineLimit(1)
                                 .padding(.horizontal, 11)
                                 .padding(.vertical, 7)
                                 .foregroundStyle(TaskTagColor.emerald.swiftUIColor)
@@ -302,8 +308,6 @@ struct FocusDashboardView: View {
                                 )
                         }
                         .buttonStyle(.plain)
-
-                        Spacer()
                     }
                 }
                 .padding(12)
@@ -406,14 +410,14 @@ struct FocusTaskGlassCard: View {
                 TaskDetailView(task: task)
             } label: {
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 8) {
+                    AdaptiveFlowLayout(horizontalSpacing: 6, verticalSpacing: 6) {
                         TagColorBadge(categoryTag: task.categoryTag, tagColor: task.tagColor)
                         TaskStatusBadge(status: task.status)
                         TaskPriorityBadge(priority: task.priority)
-                        Spacer()
                         if task.isOverdue {
                             Text("已逾期")
                                 .font(.caption2.weight(.bold))
+                                .lineLimit(1)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
                                 .foregroundStyle(.white)
@@ -448,13 +452,14 @@ struct FocusTaskGlassCard: View {
                         }
                         .frame(height: 6)
 
-                        HStack(spacing: 12) {
+                        AdaptiveFlowLayout(horizontalSpacing: 10, verticalSpacing: 6) {
                             let subs = task.subtasks
                             if !subs.isEmpty {
                                 let done = subs.filter(\.isCompleted).count
                                 Label("\(done)/\(subs.count) 子步骤", systemImage: "checklist")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
+                                    .lineLimit(1)
                             }
 
                             let totalAttachments = task.attachments.count + task.logs.reduce(0) { $0 + $1.attachments.count }
@@ -462,6 +467,7 @@ struct FocusTaskGlassCard: View {
                                 Label("\(totalAttachments) 附件", systemImage: "paperclip")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
+                                    .lineLimit(1)
                             }
 
                             let uncompletedSchedules = task.customFollowUpSchedules.filter { !$0.isCompleted }.count
@@ -469,14 +475,14 @@ struct FocusTaskGlassCard: View {
                                 Label("\(uncompletedSchedules) 复追提醒", systemImage: "bell.badge.fill")
                                     .font(.caption2)
                                     .foregroundStyle(TaskTagColor.violet.swiftUIColor)
+                                    .lineLimit(1)
                             }
-
-                            Spacer()
 
                             if let nextReminder = task.upcomingReminderDates.first {
                                 HStack(spacing: 3) {
                                     Image(systemName: "clock")
                                     Text(nextReminder.formatted(date: .abbreviated, time: .shortened))
+                                        .lineLimit(1)
                                 }
                                 .font(.caption2.weight(.medium))
                                 .foregroundStyle(task.tagColor.swiftUIColor)
@@ -494,6 +500,8 @@ struct FocusTaskGlassCard: View {
                 Button(action: onQuickProgress) {
                     Label("记进展", systemImage: "text.bubble.fill")
                         .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                         .foregroundStyle(TaskTagColor.sky.swiftUIColor)
@@ -505,8 +513,10 @@ struct FocusTaskGlassCard: View {
                 .buttonStyle(.plain)
 
                 Button(action: onOutcomeDecision) {
-                    Label("记结果/复追或归档", systemImage: "flag.checkered")
+                    Label("结果/归档", systemImage: "flag.checkered")
                         .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                         .foregroundStyle(TaskTagColor.emerald.swiftUIColor)
@@ -518,8 +528,10 @@ struct FocusTaskGlassCard: View {
                 .buttonStyle(.plain)
 
                 Button(action: onAddFollowUp) {
-                    Label("加复追提醒", systemImage: "calendar.badge.plus")
+                    Label("加复追", systemImage: "calendar.badge.plus")
                         .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                         .foregroundStyle(TaskTagColor.violet.swiftUIColor)
@@ -573,7 +585,8 @@ struct QuickProgressLogSheet: View {
 
                     Spacer()
                 }
-                .padding(16)
+                .adaptiveScreenContainer()
+                .padding(.vertical, 14)
             }
             .navigationTitle("快速记录工作进展")
             .navigationBarTitleDisplayMode(.inline)
@@ -659,7 +672,8 @@ struct QuickManualFollowUpSheet: View {
                                     .fill(Color.primary.opacity(0.05))
                             )
                     }
-                    .padding(16)
+                    .adaptiveScreenContainer()
+                    .padding(.vertical, 14)
                 }
             }
             .navigationTitle(isOverdueRetry ? "手动添加逾期复追时间" : "添加自定义复追提醒")

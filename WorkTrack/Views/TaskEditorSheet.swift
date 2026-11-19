@@ -66,7 +66,7 @@ struct TaskEditorSheet: View {
                         scheduleAndFollowUpCard
                         subtasksEditorCard
                     }
-                    .padding(.horizontal, 16)
+                    .adaptiveScreenContainer()
                     .padding(.vertical, 14)
                 }
             }
@@ -114,7 +114,7 @@ struct TaskEditorSheet: View {
                         .fill(Color.primary.opacity(0.05))
                 )
 
-            HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("优先级")
                         .font(.caption)
@@ -127,10 +127,11 @@ struct TaskEditorSheet: View {
                     .pickerStyle(.segmented)
                 }
 
-                VStack(alignment: .leading, spacing: 6) {
+                HStack {
                     Text("当前状态")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    Spacer()
                     Menu {
                         ForEach(TaskStatus.allCases.filter(\.isActive)) { item in
                             Button {
@@ -140,9 +141,12 @@ struct TaskEditorSheet: View {
                             }
                         }
                     } label: {
-                        TaskStatusBadge(status: status)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 4)
+                        HStack(spacing: 4) {
+                            TaskStatusBadge(status: status)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -190,7 +194,7 @@ struct TaskEditorSheet: View {
                 }
             }
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 78), spacing: 8)], spacing: 8) {
                 ForEach(TaskTagColor.allCases) { colorOption in
                     Button {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
@@ -204,6 +208,7 @@ struct TaskEditorSheet: View {
                             Text(colorOption.displayName)
                                 .font(.caption2.weight(.semibold))
                                 .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 8)

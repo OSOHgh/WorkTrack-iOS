@@ -49,7 +49,7 @@ struct OutcomeDecisionSheet: View {
                             archiveConfirmationCard
                         }
                     }
-                    .padding(.horizontal, 16)
+                    .adaptiveScreenContainer()
                     .padding(.vertical, 14)
                 }
             }
@@ -139,7 +139,7 @@ struct OutcomeDecisionSheet: View {
                     .fill(Color.primary.opacity(0.05))
             )
 
-            HStack(spacing: 10) {
+            AdaptiveFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
                 PhotosPicker(
                     selection: $selectedPhotoItems,
                     maxSelectionCount: 6,
@@ -147,6 +147,7 @@ struct OutcomeDecisionSheet: View {
                 ) {
                     Label("添加结果截图/照片", systemImage: "photo.badge.plus")
                         .font(.caption.weight(.semibold))
+                        .lineLimit(1)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(
@@ -160,6 +161,7 @@ struct OutcomeDecisionSheet: View {
                 } label: {
                     Label("附加本地文件", systemImage: "paperclip.badge.ellipsis")
                         .font(.caption.weight(.semibold))
+                        .lineLimit(1)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(
@@ -168,8 +170,6 @@ struct OutcomeDecisionSheet: View {
                         )
                 }
                 .buttonStyle(.plain)
-
-                Spacer()
             }
 
             if !newAttachments.isEmpty {
@@ -217,7 +217,7 @@ struct OutcomeDecisionSheet: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
 
-            HStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
                 // Mode A: Needs Continued Tracking
                 Button {
                     withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
@@ -238,13 +238,15 @@ struct OutcomeDecisionSheet: View {
                         Text("仍需继续追踪")
                             .font(.subheadline.weight(.bold))
                             .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                         Text("阶段产出已记录，设定后续复追时间点，到点自动系统提醒")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.leading)
                     }
                     .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(
@@ -283,13 +285,15 @@ struct OutcomeDecisionSheet: View {
                         Text("确认完成并归档")
                             .font(.subheadline.weight(.bold))
                             .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                         Text("事项彻底闭环，清除后续提醒并存入工作成果库与周报统计")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.leading)
                     }
                     .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(
@@ -308,6 +312,7 @@ struct OutcomeDecisionSheet: View {
                 }
                 .buttonStyle(.plain)
             }
+            .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
         .liquidGlassCard(
