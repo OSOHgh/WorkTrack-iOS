@@ -341,34 +341,17 @@ struct OutcomeDecisionSheet: View {
 
             Divider()
 
-            Text("或手动选择任意日期与时间添加（支持添加多个节点）")
+            Text("或手动选择任意日期与时间添加（选定时间并点击「确认」即可加入列表）")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            HStack {
-                DatePicker(
-                    "自定义复追时间",
-                    selection: $pickerFollowUpDate,
-                    displayedComponents: [.date, .hourAndMinute]
-                )
-                .labelsHidden()
-
-                Spacer()
-
-                Button {
-                    addFollowUpDate(pickerFollowUpDate)
-                } label: {
-                    Label("加入提醒列表", systemImage: "plus.circle.fill")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .foregroundStyle(.white)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(TaskTagColor.violet.gradient)
-                        )
-                }
-                .buttonStyle(.plain)
+            ConfirmableDatePickerRow(
+                title: "选择自定义复追时间",
+                selection: $pickerFollowUpDate,
+                displayedComponents: [.date, .hourAndMinute],
+                accentColor: TaskTagColor.violet.swiftUIColor
+            ) { confirmedDate in
+                addFollowUpDate(confirmedDate)
             }
 
             TextField("继续追踪提醒备注（如：核对上线后第2天数据表现）", text: $followUpNote)

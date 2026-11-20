@@ -580,12 +580,13 @@ struct RoutineRuleEditorSheet: View {
                                 }
                             }
 
-                            DatePicker(
-                                "触发时间",
+                            ConfirmableDatePickerRow(
+                                title: "触发时间",
                                 selection: $selectedTime,
-                                displayedComponents: .hourAndMinute
+                                displayedComponents: [.hourAndMinute],
+                                accentColor: TaskTagColor.amber.swiftUIColor,
+                                showQuickPresets: false
                             )
-                            .font(.subheadline.weight(.semibold))
 
                             TextField("提醒标题（如：早间待办汇总 / 晚间复盘核对）", text: $title)
                                 .font(.subheadline)

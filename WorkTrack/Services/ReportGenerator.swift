@@ -139,34 +139,37 @@ enum ReportGenerator {
             }
 
         var lines: [String] = []
-        lines.append("# WorkTrack \(config.preset.displayName)")
+        lines.append("【WorkTrack \(config.preset.displayName)】")
         lines.append("统计周期：\(formatDay(normalizedStart)) 至 \(formatDay(normalizedEnd))")
         if let categoryFilter = config.categoryFilter?.trimmingCharacters(in: .whitespacesAndNewlines),
            !categoryFilter.isEmpty {
             lines.append("分类筛选：\(categoryFilter)")
         }
         lines.append("生成时间：\(formatDateTime(Date()))")
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
         lines.append("")
 
         // Section 1
-        lines.append("## 一、核心统计概览")
-        lines.append("- 本期完成归档：\(archivedInRange.count) 项")
-        lines.append("- 推进中与追踪中事项：\(activeTrackingTasks.count) 项（其中需继续追踪 \(followUpTasksCount) 项）")
-        lines.append("- 当前逾期未处理：\(overdueCount) 项")
-        lines.append("- 本期新增进展记录：\(logsInRangeCount) 条")
+        lines.append("一、核心统计概览")
+        lines.append("  • 本期完成归档：\(archivedInRange.count) 项")
+        lines.append("  • 推进与追踪中：\(activeTrackingTasks.count) 项（需继续追踪 \(followUpTasksCount) 项）")
+        lines.append("  • 当前逾期未处理：\(overdueCount) 项")
+        lines.append("  • 本期新增进展：\(logsInRangeCount) 条")
         lines.append("")
 
         // Section 2
-        lines.append("## 二、已完成归档成果")
+        lines.append("二、已完成归档成果")
         if archivedInRange.isEmpty {
-            lines.append("- 本统计周期内暂无已归档成果。")
+            lines.append("  • 本统计周期内暂无已归档成果")
         } else {
             for (index, task) in archivedInRange.enumerated() {
+                if index > 0 { lines.append("") }
                 let doneDate = formatDateTime(task.completedAt ?? task.updatedAt)
-                lines.append("\(index + 1). [\(task.categoryTag)] \(task.title)（归档时间：\(doneDate)）")
+                lines.append("  \(index + 1). \(task.title)")
+                lines.append("     分类：\(task.categoryTag) ｜ 归档时间：\(doneDate)")
                 let summary = task.outcomeSummary.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !summary.isEmpty {
-                    lines.append("   - 工作结果：\(summary)")
+                    lines.append("     工作结果：\(summary)")
                 }
                 if config.includeDetailedTimeline {
                     appendLogs(
@@ -181,17 +184,19 @@ enum ReportGenerator {
         lines.append("")
 
         // Section 3
-        lines.append("## 三、推进中与需继续追踪事项")
+        lines.append("三、推进中与需继续追踪事项")
         if activeTrackingTasks.isEmpty {
-            lines.append("- 当前暂无推进中或需继续追踪的工作事项。")
+            lines.append("  • 当前暂无推进中或需继续追踪的工作事项")
         } else {
             for (index, task) in activeTrackingTasks.enumerated() {
+                if index > 0 { lines.append("") }
                 let progressPercent = Int((task.progressFraction * 100).rounded())
-                let overdueTag = task.isOverdue ? " · ⚠️ 已逾期" : ""
-                lines.append("\(index + 1). [\(task.status.displayName) · \(task.priority.displayName)] \(task.title)（标签：\(task.categoryTag)，进度：\(progressPercent)%\(overdueTag)）")
+                let overdueTag = task.isOverdue ? "（已逾期）" : ""
+                lines.append("  \(index + 1). \(task.title)\(overdueTag)")
+                lines.append("     状态：\(task.status.displayName) ｜ 优先级：\(task.priority.displayName) ｜ 分类：\(task.categoryTag) ｜ 进度：\(progressPercent)%")
                 let outcome = task.outcomeSummary.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !outcome.isEmpty {
-                    lines.append("   - 阶段结果：\(outcome)")
+                    lines.append("     阶段结果：\(outcome)")
                 }
                 if config.includeDetailedTimeline {
                     appendLogs(
@@ -206,13 +211,14 @@ enum ReportGenerator {
         lines.append("")
 
         // Section 4
-        lines.append("## 四、下阶段重点跟进计划")
+        lines.append("四、下阶段重点跟进计划")
         if !config.includePendingFollowUps {
-            lines.append("- 已按配置省略待跟进计划明细。")
+            lines.append("  • 已按配置省略待跟进计划明细")
         } else if followUpPlanTasks.isEmpty {
-            lines.append("- 暂无待跟进提醒或计划节点。")
+            lines.append("  • 暂无待跟进提醒或计划节点")
         } else {
             for (index, task) in followUpPlanTasks.enumerated() {
+                if index > 0 { lines.append("") }
                 var scheduleParts: [String] = []
                 if let nextFollowUp = task.nextFollowUpAt {
                     scheduleParts.append("下次追踪：\(formatDateTime(nextFollowUp))")
@@ -230,7 +236,8 @@ enum ReportGenerator {
                     scheduleParts.append("自定义复追：\(formatDateTime(customFirst.scheduledAt))\(noteSuffix)")
                 }
                 let detailText = scheduleParts.isEmpty ? "待补充具体复追时间" : scheduleParts.joined(separator: " ｜ ")
-                lines.append("\(index + 1). [\(task.categoryTag)] \(task.title) — \(detailText)")
+                lines.append("  \(index + 1). \(task.title)（\(task.categoryTag)）")
+                lines.append("     \(detailText)")
             }
         }
 
@@ -260,8 +267,10 @@ enum ReportGenerator {
         let sortedLogs = task.logs.sorted { $0.createdAt < $1.createdAt }
         let rangeLogs = sortedLogs.filter { $0.createdAt >= startDate && $0.createdAt <= endDate }
         let logsToDisplay = rangeLogs.isEmpty ? Array(sortedLogs.suffix(3)) : rangeLogs
+        guard !logsToDisplay.isEmpty else { return }
+        lines.append("     进展明细：")
         for log in logsToDisplay {
-            lines.append("   - [\(log.entryType.displayName) \(formatDateTime(log.createdAt))] \(log.content)")
+            lines.append("       · \(formatDateTime(log.createdAt)) [\(log.entryType.displayName)] \(log.content)")
         }
     }
 

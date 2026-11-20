@@ -16,16 +16,12 @@ struct TaskDetailView: View {
     // Sheets & Modals
     @State private var showingEditSheet: Bool = false
     @State private var showingOutcomeSheet: Bool = false
-    @State private var showingLogComposerSheet: Bool = false
+    @State private var showingProgressFollowUpSheet: Bool = false
+    @State private var openSheetWithFollowUpEnabled: Bool = false
     @State private var previewingImageAttachment: AttachmentItem?
 
     // Inline Subtask Input
     @State private var newSubtaskTitle: String = ""
-
-    // Inline Custom Follow-Up / Overdue Reminder Input
-    @State private var newReminderDate: Date = Date().addingTimeInterval(3600 * 3)
-    @State private var newReminderNote: String = ""
-    @State private var newReminderIsOverdueRetry: Bool = false
 
     // Task-level Attachments
     @State private var selectedTaskPhotos: [PhotosPickerItem] = []
@@ -71,8 +67,12 @@ struct TaskDetailView: View {
         .sheet(isPresented: $showingOutcomeSheet) {
             OutcomeDecisionSheet(task: task)
         }
-        .sheet(isPresented: $showingLogComposerSheet) {
-            DetailedProgressLogComposerSheet(task: task)
+        .sheet(isPresented: $showingProgressFollowUpSheet) {
+            ProgressFollowUpSheet(
+                task: task,
+                defaultEnableFollowUp: openSheetWithFollowUpEnabled,
+                defaultIsOverdueRetry: task.isOverdue
+            )
         }
         .sheet(item: $previewingImageAttachment) { item in
             AttachmentImagePreviewSheet(item: item)
@@ -226,62 +226,30 @@ struct TaskDetailView: View {
     private var customFollowUpRemindersCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("自定义复追与逾期提醒时间列表", systemImage: "bell.and.waves.left.and.right.fill")
+                Label("自定义复追与逾期提醒 (\(task.customFollowUpSchedules.filter { !$0.isCompleted }.count))", systemImage: "bell.and.waves.left.and.right.fill")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(TaskTagColor.violet.swiftUIColor)
                 Spacer()
-                Text("\(task.customFollowUpSchedules.filter { !$0.isCompleted }.count) 个待触发")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-
-            // Manual Add Custom Follow-Up / Overdue Reminder Box
-            VStack(alignment: .leading, spacing: 10) {
-                DatePicker(
-                    "提醒时间",
-                    selection: $newReminderDate,
-                    displayedComponents: [.date, .hourAndMinute]
-                )
-                .font(.caption)
-
-                Toggle("标记为逾期未处理复追提醒", isOn: $newReminderIsOverdueRetry)
-                    .font(.caption.weight(.semibold))
-                    .tint(TaskTagColor.coral.swiftUIColor)
-
-                HStack(spacing: 8) {
-                    TextField("输入提醒备注（如：逾期未回，再次电话沟通确认）", text: $newReminderNote)
-                        .font(.caption)
-                        .padding(10)
+                Button {
+                    openSheetWithFollowUpEnabled = true
+                    showingProgressFollowUpSheet = true
+                } label: {
+                    Label("新增复追提醒", systemImage: "calendar.badge.plus")
+                        .font(.caption.weight(.bold))
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6)
+                        .foregroundStyle(.white)
                         .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(Color.primary.opacity(0.05))
+                            Capsule(style: .continuous)
+                                .fill(task.isOverdue ? TaskTagColor.coral.gradient : TaskTagColor.violet.gradient)
                         )
-
-                    Button {
-                        addCustomFollowUpSchedule()
-                    } label: {
-                        Label("手动添加", systemImage: "plus.circle.fill")
-                            .font(.caption.weight(.bold))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
-                            .foregroundStyle(.white)
-                            .background(
-                                Capsule(style: .continuous)
-                                    .fill(newReminderIsOverdueRetry ? TaskTagColor.coral.gradient : TaskTagColor.violet.gradient)
-                            )
-                    }
-                    .buttonStyle(.plain)
                 }
+                .buttonStyle(.plain)
             }
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.primary.opacity(0.04))
-            )
 
             // Scheduled List
             if task.customFollowUpSchedules.isEmpty {
-                Text("暂未设置自定义复追或逾期重追提醒。您可以在上方自由添加任意多个提醒时间点。")
+                Text("暂未设置自定义复追或逾期重追提醒，点击右上角「新增复追提醒」或底部「进展与复追」即可自由设定多个提醒时间。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -514,9 +482,10 @@ struct TaskDetailView: View {
                 Spacer()
 
                 Button {
-                    showingLogComposerSheet = true
+                    openSheetWithFollowUpEnabled = false
+                    showingProgressFollowUpSheet = true
                 } label: {
-                    Label("新增进展记录", systemImage: "plus.bubble.fill")
+                    Label("新增记录", systemImage: "plus.bubble.fill")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(task.tagColor.swiftUIColor)
                 }
@@ -524,7 +493,7 @@ struct TaskDetailView: View {
             }
 
             if sortedLogs.isEmpty {
-                Text("暂无进展时间线记录，点击下方「记录进展」随时留存推进痕迹。")
+                Text("暂无进展时间线记录，点击下方「进展与复追」随时留存推进痕迹或设置提醒。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -607,12 +576,15 @@ struct TaskDetailView: View {
     private var bottomFloatingActionBar: some View {
         HStack(spacing: 12) {
             Button {
-                showingLogComposerSheet = true
+                openSheetWithFollowUpEnabled = false
+                showingProgressFollowUpSheet = true
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "plus.bubble.fill")
-                    Text("记录进展")
+                    Text("进展与复追")
                         .fontWeight(.bold)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
                 .font(.subheadline)
                 .frame(maxWidth: .infinity)
@@ -630,7 +602,7 @@ struct TaskDetailView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "flag.checkered")
-                    Text("记录结果 / 归档")
+                    Text("结果与归档")
                         .fontWeight(.bold)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
@@ -651,22 +623,6 @@ struct TaskDetailView: View {
     }
 
     // MARK: - Actions & Logic
-
-    private func addCustomFollowUpSchedule() {
-        let note = newReminderNote.trimmingCharacters(in: .whitespacesAndNewlines)
-        task.addManualFollowUp(
-            at: newReminderDate,
-            note: note,
-            isOverdueRetry: newReminderIsOverdueRetry
-        )
-        let labelText = newReminderIsOverdueRetry ? "添加逾期复追提醒" : "添加自定义复追提醒"
-        task.addProgressLog(
-            content: "\(labelText)：\(newReminderDate.formatted(date: .abbreviated, time: .shortened)) \(note)",
-            type: .followUpNote
-        )
-        newReminderNote = ""
-        saveAndSyncNotifications()
-    }
 
     private func toggleFollowUpItemCompletion(_ item: FollowUpScheduleItem) {
         var list = task.customFollowUpSchedules
@@ -870,159 +826,6 @@ struct AttachmentImagePreviewSheet: View {
                     Button("关闭") {
                         dismiss()
                     }
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Detailed Progress Log Composer with Attachments
-
-struct DetailedProgressLogComposerSheet: View {
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
-
-    @Bindable var task: WorkTask
-
-    @State private var content: String = ""
-    @State private var entryType: ProgressEntryType = .update
-    @State private var logAttachments: [AttachmentItem] = []
-    @State private var selectedPhotos: [PhotosPickerItem] = []
-    @State private var showingFileImporter: Bool = false
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                LiquidGlassAmbientBackground()
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Picker("类型", selection: $entryType) {
-                            ForEach(ProgressEntryType.allCases) { item in
-                                Text(item.displayName).tag(item)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-
-                        TextField("详细描述当前工作进展、同步内容、风险卡点或复追反馈...", text: $content, axis: .vertical)
-                            .lineLimit(4...10)
-                            .padding(12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(Color.primary.opacity(0.05))
-                            )
-
-                        AdaptiveFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
-                            PhotosPicker(
-                                selection: $selectedPhotos,
-                                maxSelectionCount: 6,
-                                matching: .images
-                            ) {
-                                Label("附带进展截图/照片", systemImage: "photo.badge.plus")
-                                    .font(.caption.weight(.semibold))
-                                    .lineLimit(1)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        Capsule().fill(TaskTagColor.sky.swiftUIColor.opacity(0.15))
-                                    )
-                            }
-
-                            Button {
-                                showingFileImporter = true
-                            } label: {
-                                Label("附带文件", systemImage: "paperclip")
-                                    .font(.caption.weight(.semibold))
-                                    .lineLimit(1)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        Capsule().fill(TaskTagColor.teal.swiftUIColor.opacity(0.15))
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        if !logAttachments.isEmpty {
-                            ForEach(logAttachments) { att in
-                                HStack {
-                                    Image(systemName: att.kind.systemImage)
-                                    Text(att.fileName)
-                                        .font(.caption)
-                                        .lineLimit(1)
-                                    Spacer()
-                                    Text(att.formattedSize)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                    Button(role: .destructive) {
-                                        AttachmentStore.shared.deleteAttachment(att)
-                                        logAttachments.removeAll { $0.id == att.id }
-                                    } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                                .padding(8)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .fill(Color.primary.opacity(0.04))
-                                )
-                            }
-                        }
-                    }
-                    .adaptiveScreenContainer()
-                    .padding(.vertical, 14)
-                }
-            }
-            .navigationTitle("新增进展时间线记录")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存记录") {
-                        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !trimmed.isEmpty || !logAttachments.isEmpty else { return }
-                        let finalText = trimmed.isEmpty ? "上传了 \(logAttachments.count) 个进展附件" : trimmed
-                        task.addProgressLog(
-                            content: finalText,
-                            type: entryType,
-                            attachments: logAttachments
-                        )
-                        if task.status == .todo {
-                            task.status = .inProgress
-                        }
-                        try? modelContext.save()
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                    .disabled(content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && logAttachments.isEmpty)
-                }
-            }
-            .fileImporter(
-                isPresented: $showingFileImporter,
-                allowedContentTypes: [.item, .data, .content, .pdf, .plainText, .image, .archive],
-                allowsMultipleSelection: true
-            ) { result in
-                if case .success(let urls) = result {
-                    for url in urls {
-                        if let imported = try? AttachmentStore.shared.importFile(from: url) {
-                            logAttachments.append(imported)
-                        }
-                    }
-                }
-            }
-            .onChange(of: selectedPhotos) { _, items in
-                guard !items.isEmpty else { return }
-                Task { @MainActor in
-                    for item in items {
-                        if let data = try? await item.loadTransferable(type: Data.self),
-                           let saved = try? AttachmentStore.shared.saveImageData(data, suggestedName: "log_\(Int(Date().timeIntervalSince1970)).jpg") {
-                            logAttachments.append(saved)
-                        }
-                    }
-                    selectedPhotos.removeAll()
                 }
             }
         }

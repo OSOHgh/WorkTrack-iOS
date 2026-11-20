@@ -243,12 +243,12 @@ struct TaskEditorSheet: View {
                 .font(.subheadline.weight(.medium))
 
             if hasDueDate {
-                DatePicker(
-                    "截止时间",
+                ConfirmableDatePickerRow(
+                    title: "截止时间",
                     selection: $dueDate,
-                    displayedComponents: [.date, .hourAndMinute]
+                    displayedComponents: [.date, .hourAndMinute],
+                    accentColor: tagColor.swiftUIColor
                 )
-                .font(.subheadline)
             }
 
             Divider()
@@ -257,12 +257,12 @@ struct TaskEditorSheet: View {
                 .font(.subheadline.weight(.medium))
 
             if hasFollowUpDate {
-                DatePicker(
-                    "下次复追时间",
+                ConfirmableDatePickerRow(
+                    title: "下次复追时间",
                     selection: $nextFollowUpAt,
-                    displayedComponents: [.date, .hourAndMinute]
+                    displayedComponents: [.date, .hourAndMinute],
+                    accentColor: tagColor.swiftUIColor
                 )
-                .font(.subheadline)
             }
 
             Divider()
@@ -272,12 +272,12 @@ struct TaskEditorSheet: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
 
-                DatePicker(
-                    "提醒时间",
+                ConfirmableDatePickerRow(
+                    title: "提醒时间",
                     selection: $pendingScheduleDate,
-                    displayedComponents: [.date, .hourAndMinute]
+                    displayedComponents: [.date, .hourAndMinute],
+                    accentColor: pendingScheduleIsOverdueRetry ? TaskTagColor.coral.swiftUIColor : tagColor.swiftUIColor
                 )
-                .font(.caption)
 
                 HStack(spacing: 8) {
                     TextField("复追备注（如：催促法务反馈合同）", text: $pendingScheduleNote)

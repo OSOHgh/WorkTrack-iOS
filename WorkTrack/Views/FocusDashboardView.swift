@@ -2,72 +2,117 @@ import SwiftUI
 import SwiftData
 
 struct FocusDashboardView: View {
-    @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var notificationManager: NotificationManager
 
     @Query(sort: \WorkTask.updatedAt, order: .reverse) private var allTasks: [WorkTask]
     @Query(sort: \RoutineReminderRule.hour, order: .forward) private var allRoutines: [RoutineReminderRule]
 
+    var onNavigateToBoard: (BoardFilterRequest) -> Void = { _ in }
+
     @State private var showingNewTaskSheet: Bool = false
-    @State private var taskForQuickProgress: WorkTask?
-    @State private var taskForOutcomeDecision: WorkTask?
-    @State private var taskForQuickFollowUp: WorkTask?
-    @State private var quickFollowUpIsOverdueRetry: Bool = false
     @State private var showingCertRenewedToast: Bool = false
 
-    // MARK: - Computed Task Collections
+    // MARK: - Computed Overview Metrics
 
     private var activeTasks: [WorkTask] {
         allTasks.filter { $0.status.isActive }
     }
 
     private var overdueTasks: [WorkTask] {
-        activeTasks
-            .filter { $0.isOverdue }
-            .sorted { ($0.dueDate ?? $0.nextFollowUpAt ?? $0.updatedAt) < ($1.dueDate ?? $1.nextFollowUpAt ?? $1.updatedAt) }
+        activeTasks.filter { $0.isOverdue }
     }
 
     private var followUpTasks: [WorkTask] {
-        activeTasks
-            .filter { $0.status == .followUp }
-            .sorted { ($0.nextFollowUpAt ?? $0.updatedAt) < ($1.nextFollowUpAt ?? $1.updatedAt) }
+        activeTasks.filter { $0.status == .followUp }
     }
 
-    private var todayFocusTasks: [WorkTask] {
-        let calendar = Calendar.current
-        return activeTasks
-            .filter { task in
-                if task.isOverdue || task.status == .inProgress || task.status == .followUp {
-                    return true
-                }
-                if let due = task.dueDate, calendar.isDateInToday(due) {
-                    return true
-                }
-                if let nextFollow = task.nextFollowUpAt, calendar.isDateInToday(nextFollow) {
-                    return true
-                }
-                if task.customFollowUpSchedules.contains(where: { !$0.isCompleted && calendar.isDateInToday($0.scheduledAt) }) {
-                    return true
-                }
-                return calendar.isDateInToday(task.createdAt)
-            }
-            .sorted {
-                if $0.isOverdue != $1.isOverdue {
-                    return $0.isOverdue && !$1.isOverdue
-                }
-                if $0.priority.rawValue != $1.priority.rawValue {
-                    return $0.priority.rawValue > $1.priority.rawValue
-                }
-                return $0.updatedAt > $1.updatedAt
-            }
+    private var waitingTasks: [WorkTask] {
+        activeTasks.filter { $0.status == .waiting }
     }
 
-    private var completedTodayCount: Int {
+    private var archivedTasks: [WorkTask] {
+        allTasks.filter { $0.status == .archived }
+    }
+
+    private var todayFocusCount: Int {
         let calendar = Calendar.current
-        return allTasks.filter { task in
-            task.status == .archived && calendar.isDateInToday(task.completedAt ?? task.updatedAt)
+        return activeTasks.filter { task in
+            if task.isOverdue || task.status == .inProgress || task.status == .followUp {
+                return true
+            }
+            if let due = task.dueDate, calendar.isDateInToday(due) {
+                return true
+            }
+            if let nextFollow = task.nextFollowUpAt, calendar.isDateInToday(nextFollow) {
+                return true
+            }
+            if task.customFollowUpSchedules.contains(where: { !$0.isCompleted && calendar.isDateInToday($0.scheduledAt) }) {
+                return true
+            }
+            return calendar.isDateInToday(task.createdAt)
         }.count
     }
+
+    private var completionRatio: Double {
+        let validTotal = activeTasks.count + archivedTasks.count
+        guard validTotal > 0 else { return 0 }
+        return Double(archivedTasks.count) / Double(validTotal)
+    }
+
+    private struct CategorySummary: Identifiable {
+        let id: String
+        let category: String
+        let color: TaskTagColor
+        let activeCount: Int
+        let overdueCount: Int
+    }
+
+    private var categorySummaries: [CategorySummary] {
+        let grouped = Dictionary(grouping: activeTasks) { task in
+            let trimmed = task.categoryTag.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "日常工作" : trimmed
+        }
+        return grouped
+            .map { key, items in
+                CategorySummary(
+                    id: key,
+                    category: key,
+                    color: items.first?.tagColor ?? .sky,
+                    activeCount: items.count,
+                    overdueCount: items.filter(\.isOverdue).count
+                )
+            }
+            .sorted {
+                if $0.activeCount != $1.activeCount {
+                    return $0.activeCount > $1.activeCount
+                }
+                return $0.category < $1.category
+            }
+    }
+
+    private struct UpcomingReminderSummary: Identifiable {
+        let id = UUID()
+        let taskTitle: String
+        let date: Date
+        let color: TaskTagColor
+    }
+
+    private var upcomingRemindersPreview: [UpcomingReminderSummary] {
+        activeTasks
+            .compactMap { task -> UpcomingReminderSummary? in
+                guard let nextDate = task.upcomingReminderDates.first else { return nil }
+                return UpcomingReminderSummary(
+                    taskTitle: task.title,
+                    date: nextDate,
+                    color: task.tagColor
+                )
+            }
+            .sorted { $0.date < $1.date }
+            .prefix(3)
+            .map { $0 }
+    }
+
+    // MARK: - Body
 
     var body: some View {
         NavigationStack {
@@ -75,18 +120,19 @@ struct FocusDashboardView: View {
                 LiquidGlassAmbientBackground()
 
                 ScrollView {
-                    VStack(spacing: 18) {
-                        summaryGlassHeader
-                        if !overdueTasks.isEmpty {
-                            overdueSpotlightSection
+                    VStack(spacing: 16) {
+                        overviewHeaderCard
+                        statusDistributionCard
+                        if !categorySummaries.isEmpty {
+                            categoryBreakdownCard
                         }
-                        todayFocusTasksSection
+                        scheduleAndActionCard
                     }
                     .adaptiveScreenContainer()
                     .padding(.vertical, 14)
                 }
             }
-            .navigationTitle("今日聚焦")
+            .navigationTitle("工作概况")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -100,31 +146,19 @@ struct FocusDashboardView: View {
             .sheet(isPresented: $showingNewTaskSheet) {
                 TaskEditorSheet()
             }
-            .sheet(item: $taskForQuickProgress) { task in
-                QuickProgressLogSheet(task: task)
-            }
-            .sheet(item: $taskForOutcomeDecision) { task in
-                OutcomeDecisionSheet(task: task)
-            }
-            .sheet(item: $taskForQuickFollowUp) { task in
-                QuickManualFollowUpSheet(
-                    task: task,
-                    defaultIsOverdueRetry: quickFollowUpIsOverdueRetry
-                )
-            }
         }
     }
 
-    // MARK: - Top Summary Liquid Glass Header
+    // MARK: - 1. Global Overview Header Card
 
-    private var summaryGlassHeader: some View {
+    private var overviewHeaderCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 10) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(Date().formatted(.dateTime.month().day().weekday()))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                    Text("工作推进与结果闭环")
+                    Text("工作事项总概况")
                         .font(.title3.weight(.bold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
@@ -132,11 +166,16 @@ struct FocusDashboardView: View {
 
                 Spacer(minLength: 8)
 
-                // Compact 7-day sideload certificate pill
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                         notificationManager.markCertificateRefreshedToday()
                         showingCertRenewedToast = true
+                    }
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .seconds(2))
+                        withAnimation {
+                            showingCertRenewedToast = false
+                        }
                     }
                 } label: {
                     let daysLeft = notificationManager.daysRemainingUntilCertExpiry
@@ -165,27 +204,60 @@ struct FocusDashboardView: View {
             }
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 145, maximum: 220), spacing: 10)], spacing: 10) {
-                metricTile(
-                    title: "今日待办",
-                    value: "\(todayFocusTasks.count)",
-                    icon: "sun.max.fill",
+                tappableMetricTile(
+                    title: "全部活动中",
+                    value: "\(activeTasks.count)",
+                    subtitle: "点击查看全部待办",
+                    icon: "tray.full.fill",
                     color: TaskTagColor.sky.swiftUIColor
-                )
-                metricTile(
+                ) {
+                    onNavigateToBoard(BoardFilterRequest(quickFilter: .allActive))
+                }
+
+                tappableMetricTile(
+                    title: "今日聚焦",
+                    value: "\(todayFocusCount)",
+                    subtitle: "到期或推进中",
+                    icon: "sun.max.fill",
+                    color: TaskTagColor.indigo.swiftUIColor
+                ) {
+                    onNavigateToBoard(BoardFilterRequest(quickFilter: .todayFocus))
+                }
+
+                tappableMetricTile(
                     title: "逾期未处理",
                     value: "\(overdueTasks.count)",
+                    subtitle: overdueTasks.isEmpty ? "当前无逾期" : "点击立即处理",
                     icon: "exclamationmark.circle.fill",
                     color: TaskTagColor.coral.swiftUIColor
-                )
-                metricTile(
+                ) {
+                    onNavigateToBoard(BoardFilterRequest(quickFilter: .overdue))
+                }
+
+                tappableMetricTile(
                     title: "需继续追踪",
                     value: "\(followUpTasks.count)",
+                    subtitle: "阶段结果跟进",
                     icon: "arrow.clockwise.circle.fill",
                     color: TaskTagColor.violet.swiftUIColor
-                )
-                metricTile(
-                    title: "今日已完成",
-                    value: "\(completedTodayCount)",
+                ) {
+                    onNavigateToBoard(BoardFilterRequest(quickFilter: .status(.followUp)))
+                }
+
+                tappableMetricTile(
+                    title: "等待外部反馈",
+                    value: "\(waitingTasks.count)",
+                    subtitle: "待对接回复",
+                    icon: "hourglass.circle.fill",
+                    color: TaskTagColor.amber.swiftUIColor
+                ) {
+                    onNavigateToBoard(BoardFilterRequest(quickFilter: .status(.waiting)))
+                }
+
+                metricDisplayTile(
+                    title: "累计已归档",
+                    value: "\(archivedTasks.count)",
+                    subtitle: "闭环率 \(Int((completionRatio * 100).rounded()))%",
                     icon: "checkmark.seal.fill",
                     color: TaskTagColor.emerald.swiftUIColor
                 )
@@ -195,23 +267,50 @@ struct FocusDashboardView: View {
         .liquidGlassCard(tint: TaskTagColor.sky.swiftUIColor)
     }
 
-    private func metricTile(title: String, value: String, icon: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private func tappableMetricTile(
+        title: String,
+        value: String,
+        subtitle: String,
+        icon: String,
+        color: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            metricDisplayTile(title: title, value: value, subtitle: subtitle, icon: icon, color: color)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func metricDisplayTile(
+        title: String,
+        value: String,
+        subtitle: String,
+        icon: String,
+        color: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Image(systemName: icon)
                     .font(.caption)
                     .foregroundStyle(color)
                 Spacer()
+                Image(systemName: "arrow.up.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
             Text(value)
-                .font(.title3.weight(.bold).monospacedDigit())
+                .font(.title2.weight(.bold).monospacedDigit())
                 .foregroundStyle(.primary)
             Text(title)
-                .font(.caption2.weight(.medium))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            Text(subtitle)
+                .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
-        .padding(10)
+        .padding(11)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -223,165 +322,216 @@ struct FocusDashboardView: View {
         )
     }
 
-    // MARK: - Overdue & Needs-Follow-Up Spotlight Section
+    // MARK: - 2. Status Distribution Overview Card
 
-    private var overdueSpotlightSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private var statusDistributionCard: some View {
+        let totalValid = max(1, activeTasks.count + archivedTasks.count)
+        let statusesToDisplay: [TaskStatus] = [.todo, .inProgress, .waiting, .followUp, .archived]
+
+        return VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("逾期未处理 · 重点催办与手动复追", systemImage: "exclamationmark.triangle.fill")
+                Label("事项状态分布概况", systemImage: "chart.pie.fill")
                     .font(.subheadline.weight(.bold))
-                    .foregroundStyle(TaskTagColor.coral.swiftUIColor)
+                    .foregroundStyle(TaskTagColor.indigo.swiftUIColor)
                 Spacer()
-                Text("\(overdueTasks.count) 项逾期")
+                Text("共 \(activeTasks.count + archivedTasks.count) 项")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(TaskTagColor.coral.swiftUIColor)
-            }
-
-            ForEach(overdueTasks) { task in
-                VStack(alignment: .leading, spacing: 10) {
-                    NavigationLink {
-                        TaskDetailView(task: task)
-                    } label: {
-                        HStack(alignment: .top, spacing: 10) {
-                            Circle()
-                                .fill(TaskTagColor.coral.gradient)
-                                .frame(width: 10, height: 10)
-                                .padding(.top, 5)
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(task.title)
-                                    .font(.subheadline.weight(.bold))
-                                    .foregroundStyle(.primary)
-                                    .multilineTextAlignment(.leading)
-
-                                HStack(spacing: 8) {
-                                    TagColorBadge(categoryTag: task.categoryTag, tagColor: task.tagColor)
-                                    if let due = task.dueDate, due < Date() {
-                                        Text("截止逾期：\(due.formatted(date: .abbreviated, time: .shortened))")
-                                            .font(.caption2.weight(.semibold))
-                                            .foregroundStyle(TaskTagColor.coral.swiftUIColor)
-                                    } else if let follow = task.nextFollowUpAt, follow < Date() {
-                                        Text("复追逾期：\(follow.formatted(date: .abbreviated, time: .shortened))")
-                                            .font(.caption2.weight(.semibold))
-                                            .foregroundStyle(TaskTagColor.coral.swiftUIColor)
-                                    }
-                                }
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-
-                    AdaptiveFlowLayout(horizontalSpacing: 8, verticalSpacing: 8) {
-                        Button {
-                            quickFollowUpIsOverdueRetry = true
-                            taskForQuickFollowUp = task
-                        } label: {
-                            Label("手动添加逾期复追时间", systemImage: "calendar.badge.plus")
-                                .font(.caption.weight(.semibold))
-                                .lineLimit(1)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 7)
-                                .foregroundStyle(.white)
-                                .background(
-                                    Capsule(style: .continuous)
-                                        .fill(TaskTagColor.coral.gradient)
-                                )
-                        }
-                        .buttonStyle(.plain)
-
-                        Button {
-                            taskForOutcomeDecision = task
-                        } label: {
-                            Label("录入结果/归档", systemImage: "flag.checkered")
-                                .font(.caption.weight(.semibold))
-                                .lineLimit(1)
-                                .padding(.horizontal, 11)
-                                .padding(.vertical, 7)
-                                .foregroundStyle(TaskTagColor.emerald.swiftUIColor)
-                                .background(
-                                    Capsule(style: .continuous)
-                                        .fill(TaskTagColor.emerald.swiftUIColor.opacity(0.15))
-                                )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(TaskTagColor.coral.swiftUIColor.opacity(0.08))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .strokeBorder(TaskTagColor.coral.swiftUIColor.opacity(0.28), lineWidth: 1)
-                        )
-                )
-            }
-        }
-        .padding(16)
-        .liquidGlassCard(tint: TaskTagColor.coral.swiftUIColor)
-    }
-
-    // MARK: - Today's Active Task Cards Section
-
-    private var todayFocusTasksSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label("今日待办与持续追踪事项", systemImage: "sparkles")
-                    .font(.headline)
-                Spacer()
-                Text("共 \(activeTasks.count) 项活动中")
-                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            if activeTasks.isEmpty {
-                emptyFocusStateCard
-            } else {
-                let displayList = todayFocusTasks.isEmpty ? activeTasks : todayFocusTasks
-                ForEach(displayList) { task in
-                    FocusTaskGlassCard(
-                        task: task,
-                        onQuickProgress: {
-                            taskForQuickProgress = task
-                        },
-                        onOutcomeDecision: {
-                            taskForOutcomeDecision = task
-                        },
-                        onAddFollowUp: {
-                            quickFollowUpIsOverdueRetry = task.isOverdue
-                            taskForQuickFollowUp = task
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("整体完成归档率")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(Int((completionRatio * 100).rounded()))%")
+                        .font(.caption.weight(.bold).monospacedDigit())
+                        .foregroundStyle(TaskTagColor.emerald.swiftUIColor)
+                }
+
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.primary.opacity(0.08))
+                            .frame(height: 8)
+                        Capsule()
+                            .fill(TaskTagColor.emerald.gradient)
+                            .frame(width: max(8, geo.size.width * completionRatio), height: 8)
+                    }
+                }
+                .frame(height: 8)
+            }
+
+            VStack(spacing: 8) {
+                ForEach(statusesToDisplay) { status in
+                    let count = allTasks.filter { $0.status == status }.count
+                    let ratio = Double(count) / Double(totalValid)
+
+                    let rowContent = HStack(spacing: 10) {
+                        Image(systemName: status.systemImage)
+                            .font(.caption)
+                            .foregroundStyle(status.themeColor)
+                            .frame(width: 18)
+
+                        Text(status.displayName)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 72, alignment: .leading)
+
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule()
+                                    .fill(Color.primary.opacity(0.06))
+                                    .frame(height: 6)
+                                Capsule()
+                                    .fill(status.themeColor.opacity(0.85))
+                                    .frame(width: count > 0 ? max(8, geo.size.width * ratio) : 0, height: 6)
+                            }
+                            .frame(maxHeight: .infinity, alignment: .center)
                         }
-                    )
+                        .frame(height: 16)
+
+                        Text("\(count) 项")
+                            .font(.caption.weight(.bold).monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, alignment: .trailing)
+                    }
+                    .padding(.vertical, 4)
+
+                    if status.isActive {
+                        Button {
+                            onNavigateToBoard(BoardFilterRequest(quickFilter: .status(status)))
+                        } label: {
+                            rowContent
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        rowContent
+                    }
                 }
             }
         }
+        .padding(16)
+        .liquidGlassCard(tint: TaskTagColor.indigo.swiftUIColor)
     }
 
-    private var emptyFocusStateCard: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 40))
-                .foregroundStyle(TaskTagColor.sky.gradient)
+    // MARK: - 3. Category Breakdown Card
 
-            Text("当前暂无待推进的工作事项")
-                .font(.headline)
+    private var categoryBreakdownCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("分类标签活动概况", systemImage: "tag.fill")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(TaskTagColor.teal.swiftUIColor)
+                Spacer()
+                Text("点击标签直达筛选")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
 
-            Text("点击右上角或下方按钮创建新的工作待办，支持附加截图/文档、设定自定义复追提醒与早晚盘点。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            AdaptiveFlowLayout(horizontalSpacing: 8, verticalSpacing: 8) {
+                ForEach(categorySummaries) { item in
+                    Button {
+                        onNavigateToBoard(BoardFilterRequest(quickFilter: .allActive, category: item.category))
+                    } label: {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(item.color.gradient)
+                                .frame(width: 8, height: 8)
+                            Text(item.category)
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                            Text("\(item.activeCount)")
+                                .font(.caption2.weight(.bold).monospacedDigit())
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(item.color.swiftUIColor.opacity(0.18)))
+                            if item.overdueCount > 0 {
+                                Text("逾期\(item.overdueCount)")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(TaskTagColor.coral.swiftUIColor)
+                            }
+                        }
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                        .foregroundStyle(.primary)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(item.color.swiftUIColor.opacity(0.10))
+                                .overlay(
+                                    Capsule(style: .continuous)
+                                        .strokeBorder(item.color.swiftUIColor.opacity(0.28), lineWidth: 0.8)
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(16)
+        .liquidGlassCard(tint: TaskTagColor.teal.swiftUIColor)
+    }
+
+    // MARK: - 4. Schedule Overview & Direct Board Entry
+
+    private var scheduleAndActionCard: some View {
+        let enabledRoutinesCount = allRoutines.filter(\.isEnabled).count
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("近期提醒安排与快捷入口", systemImage: "bell.badge.fill")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(TaskTagColor.violet.swiftUIColor)
+                Spacer()
+                Text("队列 \(notificationManager.pendingRequestCount)/64")
+                    .font(.caption2.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 12) {
+                Label("早晚定时盘点：\(enabledRoutinesCount) 条已启用", systemImage: "alarm")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+
+            if upcomingRemindersPreview.isEmpty {
+                Text("近期暂无待触发的任务节点提醒。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(upcomingRemindersPreview) { reminder in
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(reminder.color.gradient)
+                                .frame(width: 7, height: 7)
+                            Text(reminder.date.formatted(date: .abbreviated, time: .shortened))
+                                .font(.caption2.weight(.bold).monospacedDigit())
+                                .foregroundStyle(reminder.color.swiftUIColor)
+                            Text(reminder.taskTitle)
+                                .font(.caption.weight(.medium))
+                                .lineLimit(1)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color.primary.opacity(0.04))
+                        )
+                    }
+                }
+            }
 
             Button {
-                showingNewTaskSheet = true
+                onNavigateToBoard(BoardFilterRequest(quickFilter: .allActive))
             } label: {
-                Label("立即新建工作待办", systemImage: "plus.circle.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 10)
+                Label("进入「全部待办」管理事项", systemImage: "arrow.right.circle.fill")
+                    .font(.subheadline.weight(.bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
                     .foregroundStyle(.white)
                     .background(
                         Capsule(style: .continuous)
@@ -390,322 +540,7 @@ struct FocusDashboardView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(26)
-        .frame(maxWidth: .infinity)
-        .liquidGlassCard(tint: TaskTagColor.sky.swiftUIColor)
-    }
-}
-
-// MARK: - Focus Task Liquid Glass Card
-
-struct FocusTaskGlassCard: View {
-    @Bindable var task: WorkTask
-    var onQuickProgress: () -> Void
-    var onOutcomeDecision: () -> Void
-    var onAddFollowUp: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            NavigationLink {
-                TaskDetailView(task: task)
-            } label: {
-                VStack(alignment: .leading, spacing: 10) {
-                    AdaptiveFlowLayout(horizontalSpacing: 6, verticalSpacing: 6) {
-                        TagColorBadge(categoryTag: task.categoryTag, tagColor: task.tagColor)
-                        TaskStatusBadge(status: task.status)
-                        TaskPriorityBadge(priority: task.priority)
-                        if task.isOverdue {
-                            Text("已逾期")
-                                .font(.caption2.weight(.bold))
-                                .lineLimit(1)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .foregroundStyle(.white)
-                                .background(Capsule().fill(TaskTagColor.coral.gradient))
-                        }
-                    }
-
-                    Text(task.title)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .multilineTextAlignment(.leading)
-
-                    if !task.taskDescription.isEmpty {
-                        Text(task.taskDescription)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                    }
-
-                    // Progress bar & counters
-                    VStack(alignment: .leading, spacing: 6) {
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule()
-                                    .fill(Color.primary.opacity(0.08))
-                                    .frame(height: 6)
-                                Capsule()
-                                    .fill(task.tagColor.gradient)
-                                    .frame(width: max(8, geo.size.width * task.progressFraction), height: 6)
-                            }
-                        }
-                        .frame(height: 6)
-
-                        AdaptiveFlowLayout(horizontalSpacing: 10, verticalSpacing: 6) {
-                            let subs = task.subtasks
-                            if !subs.isEmpty {
-                                let done = subs.filter(\.isCompleted).count
-                                Label("\(done)/\(subs.count) 子步骤", systemImage: "checklist")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-
-                            let totalAttachments = task.attachments.count + task.logs.reduce(0) { $0 + $1.attachments.count }
-                            if totalAttachments > 0 {
-                                Label("\(totalAttachments) 附件", systemImage: "paperclip")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-
-                            let uncompletedSchedules = task.customFollowUpSchedules.filter { !$0.isCompleted }.count
-                            if uncompletedSchedules > 0 {
-                                Label("\(uncompletedSchedules) 复追提醒", systemImage: "bell.badge.fill")
-                                    .font(.caption2)
-                                    .foregroundStyle(TaskTagColor.violet.swiftUIColor)
-                                    .lineLimit(1)
-                            }
-
-                            if let nextReminder = task.upcomingReminderDates.first {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "clock")
-                                    Text(nextReminder.formatted(date: .abbreviated, time: .shortened))
-                                        .lineLimit(1)
-                                }
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(task.tagColor.swiftUIColor)
-                            }
-                        }
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-
-            Divider()
-
-            // 3 Quick Action Buttons right on the card
-            HStack(spacing: 8) {
-                Button(action: onQuickProgress) {
-                    Label("记进展", systemImage: "text.bubble.fill")
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .foregroundStyle(TaskTagColor.sky.swiftUIColor)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(TaskTagColor.sky.swiftUIColor.opacity(0.13))
-                        )
-                }
-                .buttonStyle(.plain)
-
-                Button(action: onOutcomeDecision) {
-                    Label("结果/归档", systemImage: "flag.checkered")
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .foregroundStyle(TaskTagColor.emerald.swiftUIColor)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(TaskTagColor.emerald.swiftUIColor.opacity(0.13))
-                        )
-                }
-                .buttonStyle(.plain)
-
-                Button(action: onAddFollowUp) {
-                    Label("加复追", systemImage: "calendar.badge.plus")
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .foregroundStyle(TaskTagColor.violet.swiftUIColor)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(TaskTagColor.violet.swiftUIColor.opacity(0.13))
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-        }
         .padding(16)
-        .liquidGlassCard(tint: task.tagColor.swiftUIColor)
-    }
-}
-
-// MARK: - Quick Progress Log Composer Sheet
-
-struct QuickProgressLogSheet: View {
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
-
-    @Bindable var task: WorkTask
-
-    @State private var content: String = ""
-    @State private var entryType: ProgressEntryType = .update
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                LiquidGlassAmbientBackground()
-
-                VStack(alignment: .leading, spacing: 16) {
-                    Text(task.title)
-                        .font(.headline)
-
-                    Picker("记录类型", selection: $entryType) {
-                        ForEach(ProgressEntryType.allCases) { type in
-                            Text(type.displayName).tag(type)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    TextField("输入当前最新进展、卡点或关键决策...", text: $content, axis: .vertical)
-                        .lineLimit(4...8)
-                        .padding(12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(Color.primary.opacity(0.05))
-                        )
-
-                    Spacer()
-                }
-                .adaptiveScreenContainer()
-                .padding(.vertical, 14)
-            }
-            .navigationTitle("快速记录工作进展")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存进展") {
-                        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !trimmed.isEmpty else { return }
-                        task.addProgressLog(content: trimmed, type: entryType)
-                        if task.status == .todo {
-                            task.status = .inProgress
-                        }
-                        try? modelContext.save()
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                    .disabled(content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-        }
-        .presentationDetents([.medium])
-    }
-}
-
-// MARK: - Quick Manual Follow-Up / Overdue Reminder Sheet
-
-struct QuickManualFollowUpSheet: View {
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var notificationManager: NotificationManager
-
-    @Query private var allTasks: [WorkTask]
-    @Query private var allRoutines: [RoutineReminderRule]
-
-    @Bindable var task: WorkTask
-    let defaultIsOverdueRetry: Bool
-
-    @State private var scheduledDate: Date = Date().addingTimeInterval(3600 * 2)
-    @State private var note: String = ""
-    @State private var isOverdueRetry: Bool = false
-
-    init(task: WorkTask, defaultIsOverdueRetry: Bool = false) {
-        self._task = Bindable(wrappedValue: task)
-        self.defaultIsOverdueRetry = defaultIsOverdueRetry
-        _isOverdueRetry = State(initialValue: defaultIsOverdueRetry)
-    }
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                LiquidGlassAmbientBackground()
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack {
-                            TagColorBadge(categoryTag: task.categoryTag, tagColor: task.tagColor)
-                            Text(task.title)
-                                .font(.subheadline.weight(.semibold))
-                                .lineLimit(1)
-                        }
-
-                        DatePicker(
-                            "复追提醒时间",
-                            selection: $scheduledDate,
-                            displayedComponents: [.date, .hourAndMinute]
-                        )
-                        .datePickerStyle(.graphical)
-                        .padding(10)
-                        .liquidGlassCard(tint: task.tagColor.swiftUIColor, cornerRadius: 18)
-
-                        Toggle("标记为逾期未处理重点复追提醒", isOn: $isOverdueRetry)
-                            .font(.subheadline.weight(.medium))
-                            .tint(TaskTagColor.coral.swiftUIColor)
-
-                        TextField("复追备注（如：确认客户是否签署盖章版）", text: $note)
-                            .font(.subheadline)
-                            .padding(12)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(Color.primary.opacity(0.05))
-                            )
-                    }
-                    .adaptiveScreenContainer()
-                    .padding(.vertical, 14)
-                }
-            }
-            .navigationTitle(isOverdueRetry ? "手动添加逾期复追时间" : "添加自定义复追提醒")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("添加并同步通知") {
-                        task.addManualFollowUp(
-                            at: scheduledDate,
-                            note: note.trimmingCharacters(in: .whitespacesAndNewlines),
-                            isOverdueRetry: isOverdueRetry
-                        )
-                        let logPrefix = isOverdueRetry ? "手动添加逾期复追时间" : "手动添加复追提醒"
-                        task.addProgressLog(
-                            content: "\(logPrefix)：\(scheduledDate.formatted(date: .abbreviated, time: .shortened)) \(note)",
-                            type: .followUpNote
-                        )
-                        try? modelContext.save()
-
-                        let updatedTasks = (try? modelContext.fetch(FetchDescriptor<WorkTask>())) ?? allTasks
-                        let routines = (try? modelContext.fetch(FetchDescriptor<RoutineReminderRule>())) ?? allRoutines
-                        Task { @MainActor in
-                            await notificationManager.syncAllNotifications(tasks: updatedTasks, routines: routines)
-                        }
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                }
-            }
-        }
+        .liquidGlassCard(tint: TaskTagColor.violet.swiftUIColor)
     }
 }

@@ -8,6 +8,19 @@ enum AppTab: Int, Hashable {
     case settings = 3
 }
 
+enum BoardQuickFilter: Equatable, Hashable {
+    case allActive
+    case todayFocus
+    case overdue
+    case status(TaskStatus)
+}
+
+struct BoardFilterRequest: Equatable {
+    var id: UUID = UUID()
+    var quickFilter: BoardQuickFilter
+    var category: String? = nil
+}
+
 struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var notificationManager: NotificationManager
@@ -15,6 +28,7 @@ struct MainTabView: View {
 
     @State private var selectedTab: AppTab = .focus
     @State private var deepLinkedTask: WorkTask?
+    @State private var boardFilterRequest: BoardFilterRequest? = nil
 
     private var overdueAndFollowUpCount: Int {
         allTasks.filter { $0.status.isActive && ($0.isOverdue || $0.status == .followUp) }.count
@@ -22,14 +36,17 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            FocusDashboardView()
-                .tabItem {
-                    Label("今日聚焦", systemImage: "sparkles.rectangle.stack.fill")
-                }
-                .badge(overdueAndFollowUpCount > 0 ? overdueAndFollowUpCount : 0)
-                .tag(AppTab.focus)
+            FocusDashboardView { request in
+                boardFilterRequest = request
+                selectedTab = .board
+            }
+            .tabItem {
+                Label("工作概况", systemImage: "chart.bar.doc.horizontal.fill")
+            }
+            .badge(overdueAndFollowUpCount > 0 ? overdueAndFollowUpCount : 0)
+            .tag(AppTab.focus)
 
-            TaskBoardView()
+            TaskBoardView(externalFilterRequest: $boardFilterRequest)
                 .tabItem {
                     Label("全部待办", systemImage: "rectangle.grid.1x2.fill")
                 }
